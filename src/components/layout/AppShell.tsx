@@ -116,9 +116,6 @@ export function AppShell() {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-4 border-b border-gray-100">
-              <UserSwitcher />
-            </div>
             <div className="flex-1 overflow-y-auto">
               <NavLinks />
             </div>
