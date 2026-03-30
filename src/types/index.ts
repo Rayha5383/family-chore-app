@@ -12,6 +12,8 @@ export interface User {
   monthly_cap: number;
   avatar_color: string;
   avatar_emoji: string;
+  parent_id?: string;
+  login_email?: string;
 }
 
 export interface Chore {
@@ -40,6 +42,7 @@ export interface ChoreInstance {
   approved_at?: string;
   approved_by?: string;
   payout_amount?: number;
+  paid_at?: string;
   created_at: string;
 }
 

@@ -8,31 +8,32 @@ import type { Chore, VerificationType, Frequency, WeekDay } from '../../types';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const emptyForm = {
-  title: '',
-  description: '',
-  assigned_user_id: 'user-kid1',
-  frequency: 'daily' as Frequency,
-  value: '',
-  due_time: '20:00',
-  verification_type: 'photo' as VerificationType,
-  checklist_items_text: '',
-  requires_before_after: false,
-  week_days: [] as WeekDay[],
-};
-
 export function ChoreCreator() {
   const { state, addChore, updateChore, deactivateChore } = useStore();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Chore | null>(null);
+  const children = state.users.filter(u => u.role === 'child');
+
+  const emptyForm = {
+    title: '',
+    description: '',
+    assigned_user_id: children[0]?.id || '',
+    frequency: 'daily' as Frequency,
+    value: '',
+    due_time: '20:00',
+    verification_type: 'photo' as VerificationType,
+    checklist_items_text: '',
+    requires_before_after: false,
+    week_days: [] as WeekDay[],
+  };
+
   const [form, setForm] = useState(emptyForm);
 
-  const children = state.users.filter(u => u.role === 'child');
   const activeChores = state.chores.filter(c => c.active);
 
   const openCreate = () => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, assigned_user_id: children[0]?.id || '' });
     setShowForm(true);
   };
 

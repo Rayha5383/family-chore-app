@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { KID_AVATARS } from '../lib/constants';
 
 type Mode = 'signin' | 'signup';
 
@@ -9,7 +8,6 @@ export function Login() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [avatar, setAvatar] = useState('🦁');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -33,10 +31,10 @@ export function Login() {
       options: {
         data: {
           name,
-          avatar_emoji: avatar,
-          avatar_color: 'bg-indigo-500',
-          role: 'child',
-          monthly_cap: 100,
+          avatar_emoji: '👨‍👧',
+          avatar_color: 'bg-amber-500',
+          role: 'parent',
+          monthly_cap: 0,
         },
       },
     });
@@ -69,11 +67,10 @@ export function Login() {
           <div className="text-5xl mb-3">✅</div>
           <h1 className="text-2xl font-bold text-gray-900">ChoreTracker</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {mode === 'signin' ? 'Sign in to your account' : 'Create your account'}
+            {mode === 'signin' ? 'Sign in to your account' : 'Create a parent account'}
           </p>
         </div>
 
-        {/* Mode toggle */}
         <div className="flex rounded-xl bg-gray-100 p-1 mb-6">
           <button
             onClick={() => { setMode('signin'); setError(''); }}
@@ -91,34 +88,17 @@ export function Login() {
 
         <form onSubmit={mode === 'signin' ? handleSignIn : handleSignUp} className="flex flex-col gap-4">
           {mode === 'signup' && (
-            <>
-              <div>
-                <label className="label">Your Name</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="e.g. Alex"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="label">Pick your avatar</label>
-                <div className="grid grid-cols-6 gap-2 mt-1">
-                  {KID_AVATARS.map(emoji => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setAvatar(emoji)}
-                      className={`text-2xl p-1.5 rounded-xl transition-all ${avatar === emoji ? 'bg-indigo-100 ring-2 ring-indigo-500' : 'hover:bg-gray-100'}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
+            <div>
+              <label className="label">Your Name</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="e.g. Mom or Dad"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                required
+              />
+            </div>
           )}
 
           <div>
@@ -150,8 +130,14 @@ export function Login() {
           {error && <p className="text-red-600 text-sm text-center">{error}</p>}
 
           <button type="submit" disabled={loading} className="btn-primary w-full mt-1">
-            {loading ? '…' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+            {loading ? '…' : mode === 'signin' ? 'Sign In' : 'Create Parent Account'}
           </button>
+
+          {mode === 'signin' && (
+            <p className="text-center text-xs text-gray-400">
+              Kids: use the email and password your parent set up for you
+            </p>
+          )}
         </form>
       </div>
     </div>
