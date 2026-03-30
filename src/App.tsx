@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ChoreStoreProvider, useStore } from './store/ChoreStoreContext';
+import { ChoreStoreProvider } from './store/ChoreStoreContext';
 import { SessionContext } from './context/SessionContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppShell } from './components/layout/AppShell';
@@ -15,7 +15,6 @@ import { History } from './pages/kid/History';
 
 function AppRoutes() {
   const { profile, loading, signOut } = useAuth();
-  const { state } = useStore();
 
   if (loading) {
     return (
