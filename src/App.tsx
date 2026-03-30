@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ChoreStoreProvider, useStore } from './store/ChoreStoreContext';
-import { useSession } from './hooks/useSession';
 import { SessionContext } from './context/SessionContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppShell } from './components/layout/AppShell';
+import { Login } from './pages/Login';
 import { ParentDashboard } from './pages/parent/ParentDashboard';
 import { ChoreCreator } from './pages/parent/ChoreCreator';
 import { SubmissionReview } from './pages/parent/SubmissionReview';
@@ -11,35 +12,60 @@ import { MonthlyPayout } from './pages/parent/MonthlyPayout';
 import { TodaysChores } from './pages/kid/TodaysChores';
 import { EarningsTracker } from './pages/kid/EarningsTracker';
 import { History } from './pages/kid/History';
-import { SEED_USERS } from './lib/constants';
 
 function AppRoutes() {
+  const { profile, loading, signOut } = useAuth();
   const { state } = useStore();
-  const { currentUserId, switchUser } = useSession();
 
-  // Always resolve against live state.users so name/emoji updates are reflected immediately
-  const currentUser =
-    state.users.find(u => u.id === currentUserId) ||
-    SEED_USERS.find(u => u.id === currentUserId) ||
-    state.users[0];
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-600 border-t-transparent" />
+      </div>
+    );
+  }
 
-  const isParent = currentUser.role === 'parent';
+  if (!profile) return <Login />;
+
+  const isParent = profile.role === 'parent';
+
+  // Build a currentUser shape compatible with existing components
+  const currentUser = {
+    id: profile.id,
+    name: profile.name,
+    role: profile.role,
+    monthly_cap: profile.monthly_cap,
+    avatar_color: profile.avatar_color,
+    avatar_emoji: profile.avatar_emoji,
+  };
+
+  // No-op switcher — with real auth, switching users means signing out
+  const switchUser = async () => { await signOut(); };
 
   return (
     <SessionContext.Provider value={{ currentUser, switchUser }}>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<AppShell />}>
-            <Route path="parent" element={<ParentDashboard />} />
-            <Route path="parent/chores" element={<ChoreCreator />} />
-            <Route path="parent/review" element={<SubmissionReview />} />
-            <Route path="parent/earnings" element={<EarningsSummary />} />
-            <Route path="parent/payout" element={<MonthlyPayout />} />
-            <Route path="kid" element={<TodaysChores />} />
-            <Route path="kid/earnings" element={<EarningsTracker />} />
-            <Route path="kid/history" element={<History />} />
-            <Route index element={<Navigate to={isParent ? '/parent' : '/kid'} replace />} />
-            <Route path="*" element={<Navigate to={isParent ? '/parent' : '/kid'} replace />} />
+            {isParent ? (
+              <>
+                <Route path="parent" element={<ParentDashboard />} />
+                <Route path="parent/chores" element={<ChoreCreator />} />
+                <Route path="parent/review" element={<SubmissionReview />} />
+                <Route path="parent/earnings" element={<EarningsSummary />} />
+                <Route path="parent/payout" element={<MonthlyPayout />} />
+                <Route index element={<Navigate to="/parent" replace />} />
+                <Route path="*" element={<Navigate to="/parent" replace />} />
+              </>
+            ) : (
+              <>
+                <Route path="kid" element={<TodaysChores />} />
+                <Route path="kid/earnings" element={<EarningsTracker />} />
+                <Route path="kid/history" element={<History />} />
+                <Route index element={<Navigate to="/kid" replace />} />
+                <Route path="*" element={<Navigate to="/kid" replace />} />
+              </>
+            )}
           </Route>
         </Routes>
       </BrowserRouter>
@@ -49,8 +75,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <ChoreStoreProvider>
-      <AppRoutes />
-    </ChoreStoreProvider>
+    <AuthProvider>
+      <ChoreStoreProvider>
+        <AppRoutes />
+      </ChoreStoreProvider>
+    </AuthProvider>
   );
 }

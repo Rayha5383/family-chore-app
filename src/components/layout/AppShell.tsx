@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useSessionContext } from '../../context/SessionContext';
-import { UserSwitcher } from './UserSwitcher';
+import { useAuth } from '../../context/AuthContext';
 import { EditProfileModal } from '../profile/EditProfileModal';
+// UserSwitcher removed — use sign-out instead
 import {
   LayoutDashboard, ListChecks, CheckCircle, DollarSign, Calendar,
-  ClipboardList, Star, History, Menu, X, Pencil
+  ClipboardList, Star, History, Menu, X, Pencil, LogOut
 } from 'lucide-react';
 
 const parentNav = [
@@ -24,6 +25,7 @@ const kidNav = [
 
 export function AppShell() {
   const { currentUser } = useSessionContext();
+  const { signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const nav = currentUser.role === 'parent' ? parentNav : kidNav;
@@ -67,6 +69,13 @@ export function AppShell() {
             <Pencil size={14} />
           </button>
         )}
+        <button
+          onClick={signOut}
+          title="Sign out"
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+        >
+          <LogOut size={14} />
+        </button>
       </div>
     </div>
   );
@@ -78,9 +87,6 @@ export function AppShell() {
         <div className="p-4 border-b border-gray-100">
           <h1 className="text-lg font-bold text-gray-900">ChoreTracker</h1>
           <p className="text-xs text-gray-500 mt-0.5">Family Chore Manager</p>
-        </div>
-        <div className="p-4 border-b border-gray-100">
-          <UserSwitcher />
         </div>
         <div className="flex-1 overflow-y-auto">
           <NavLinks />
