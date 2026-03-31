@@ -11,7 +11,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify caller is authenticated
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
@@ -19,9 +18,9 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Client to verify the calling user
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -30,8 +29,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    // Verify caller is a parent
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
     const { data: callerProfile } = await adminClient.from('profiles').select('role, parent_id').eq('id', user.id).single();
     if (!callerProfile || callerProfile.role !== 'parent') {
       return new Response(JSON.stringify({ error: 'Only parents can send invites' }), { status: 403, headers: corsHeaders });
@@ -43,54 +42,44 @@ Deno.serve(async (req) => {
     }
 
     const inviteRole = role === 'parent' ? 'parent' : 'child';
-    // Co-parents link to the same primary parent as the caller
     const primaryParentId = callerProfile.parent_id || user.id;
+    const appUrl = redirectTo || 'https://family-chore-app-chi.vercel.app';
 
-    // Send invite email via Supabase Admin
+    const userData = {
+      name: childName,
+      avatar_emoji: inviteRole === 'parent' ? '👨‍👧' : (avatarEmoji || '🦁'),
+      avatar_color: inviteRole === 'parent' ? 'bg-amber-500' : 'bg-indigo-500',
+      role: inviteRole,
+      monthly_cap: inviteRole === 'parent' ? 0 : (monthlyCap || 100),
+      parent_id: primaryParentId,
+    };
+
+    // Check if user already exists
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === childEmail.toLowerCase());
+
+    if (existingUser) {
+      // User exists — update their metadata and send a magic link so they can sign in
+      await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: userData });
+      await adminClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email: childEmail,
+        options: { redirectTo: appUrl },
+      });
+      // Send password reset so they can set/reset their password and get back in
+      await userClient.auth.resetPasswordForEmail(childEmail, { redirectTo: appUrl });
+      return new Response(JSON.stringify({ success: true, resent: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // New user — send invite
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
-      redirectTo: redirectTo || 'https://family-chore-app-chi.vercel.app',
-      data: {
-        name: childName,
-        avatar_emoji: inviteRole === 'parent' ? '👨‍👧' : (avatarEmoji || '🦁'),
-        avatar_color: inviteRole === 'parent' ? 'bg-amber-500' : 'bg-indigo-500',
-        role: inviteRole,
-        monthly_cap: inviteRole === 'parent' ? 0 : (monthlyCap || 100),
-        parent_id: primaryParentId,
-      },
+      redirectTo: appUrl,
+      data: userData,
     });
 
     if (inviteError) {
-      // If user already exists, resend the invite
-      if (inviteError.message?.toLowerCase().includes('already been registered') ||
-          inviteError.message?.toLowerCase().includes('already exists') ||
-          inviteError.code === '422') {
-        // Look up the existing user and resend invite link
-        const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-        const existing = existingUsers?.users?.find(u => u.email === childEmail);
-        if (existing) {
-          const { error: resetError } = await adminClient.auth.admin.generateLink({
-            type: 'invite',
-            email: childEmail,
-            options: {
-              redirectTo: redirectTo || 'https://family-chore-app-chi.vercel.app',
-              data: {
-                name: childName,
-                avatar_emoji: inviteRole === 'parent' ? '👨‍👧' : (avatarEmoji || '🦁'),
-                avatar_color: inviteRole === 'parent' ? 'bg-amber-500' : 'bg-indigo-500',
-                role: inviteRole,
-                monthly_cap: inviteRole === 'parent' ? 0 : (monthlyCap || 100),
-                parent_id: primaryParentId,
-              },
-            },
-          });
-          if (resetError) {
-            return new Response(JSON.stringify({ error: 'User already exists and could not resend invite: ' + resetError.message }), { status: 400, headers: corsHeaders });
-          }
-          return new Response(JSON.stringify({ success: true, resent: true }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-      }
       return new Response(JSON.stringify({ error: inviteError.message }), { status: 400, headers: corsHeaders });
     }
 
