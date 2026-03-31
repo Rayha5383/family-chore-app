@@ -84,7 +84,7 @@ export function Login() {
           <div className="text-5xl mb-3">✅</div>
           <h1 className="text-2xl font-bold text-gray-900">ChoreTracker</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {mode === 'signin' ? 'Sign in to your account' : 'Create a parent account'}
+            {mode === 'signin' ? 'Sign in to your account' : mode === 'forgot' ? 'Reset your password' : 'Create a parent account'}
           </p>
         </div>
 
