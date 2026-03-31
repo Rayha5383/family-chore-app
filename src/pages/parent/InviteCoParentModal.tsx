@@ -28,7 +28,7 @@ export function InviteCoParentModal({ onClose }: Props) {
     });
 
     if (res.error || res.data?.error) {
-      setError(res.data?.error || res.error?.message || 'Something went wrong');
+      setError(res.data?.error || res.error?.message || JSON.stringify(res));
       setLoading(false);
       return;
     }

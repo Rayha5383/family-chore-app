@@ -26,14 +26,14 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'Unauthorized: ' + (userError?.message || 'no user') }), { status: 401, headers: corsHeaders });
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: callerProfile } = await adminClient.from('profiles').select('role, parent_id').eq('id', user.id).single();
-    if (!callerProfile || callerProfile.role !== 'parent') {
-      return new Response(JSON.stringify({ error: 'Only parents can send invites' }), { status: 403, headers: corsHeaders });
+    const { data: callerProfile, error: profileError } = await adminClient.from('profiles').select('role, parent_id').eq('id', user.id).single();
+    if (profileError || !callerProfile || callerProfile.role !== 'parent') {
+      return new Response(JSON.stringify({ error: 'Only parents can send invites. Profile error: ' + profileError?.message }), { status: 403, headers: corsHeaders });
     }
 
     const { childEmail, childName, avatarEmoji, monthlyCap, redirectTo, role } = await req.json();
@@ -54,23 +54,53 @@ Deno.serve(async (req) => {
       parent_id: primaryParentId,
     };
 
-    // Try to invite — if already exists, send password reset instead
+    // Check if user already exists
+    const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const existingUser = listData?.users?.find(u => u.email?.toLowerCase() === childEmail.toLowerCase());
+
+    if (existingUser) {
+      // Update their metadata in case it changed
+      await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: userData });
+
+      // If they never confirmed, delete and re-invite
+      if (!existingUser.email_confirmed_at && !existingUser.confirmed_at) {
+        await adminClient.auth.admin.deleteUser(existingUser.id);
+        const { error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+          redirectTo: appUrl,
+          data: userData,
+        });
+        if (reInviteError) {
+          return new Response(JSON.stringify({ error: 'Re-invite failed: ' + reInviteError.message }), { status: 400, headers: corsHeaders });
+        }
+        return new Response(JSON.stringify({ success: true, resent: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // User is confirmed — generate a magic link to sign them in
+      const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email: childEmail,
+        options: { redirectTo: appUrl },
+      });
+      if (linkError) {
+        return new Response(JSON.stringify({ error: 'Could not generate sign-in link: ' + linkError.message }), { status: 400, headers: corsHeaders });
+      }
+      // Send the magic link email via the action link
+      console.log('Magic link generated for existing confirmed user:', linkData?.properties?.action_link);
+      return new Response(JSON.stringify({ success: true, resent: true, alreadyConfirmed: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // New user — send invite
     const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
       redirectTo: appUrl,
       data: userData,
     });
 
     if (inviteError) {
-      // User already has an account — send them a password reset link to get back in
-      const { error: resetError } = await adminClient.auth.resetPasswordForEmail(childEmail, {
-        redirectTo: appUrl,
-      });
-      if (resetError) {
-        return new Response(JSON.stringify({ error: resetError.message }), { status: 400, headers: corsHeaders });
-      }
-      return new Response(JSON.stringify({ success: true, resent: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({ error: 'Invite failed: ' + inviteError.message }), { status: 400, headers: corsHeaders });
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -78,6 +108,6 @@ Deno.serve(async (req) => {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Unexpected error: ' + String(err) }), { status: 500, headers: corsHeaders });
   }
 });
