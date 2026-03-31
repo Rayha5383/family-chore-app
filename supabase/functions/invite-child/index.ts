@@ -54,36 +54,26 @@ Deno.serve(async (req) => {
       parent_id: primaryParentId,
     };
 
-    // Check if user already exists
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === childEmail.toLowerCase());
-
-    if (existingUser) {
-      // User exists — update their metadata and send a magic link so they can sign in
-      await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: userData });
-      await adminClient.auth.admin.generateLink({
-        type: 'magiclink',
-        email: childEmail,
-        options: { redirectTo: appUrl },
-      });
-      // Send password reset so they can set/reset their password and get back in
-      await userClient.auth.resetPasswordForEmail(childEmail, { redirectTo: appUrl });
-      return new Response(JSON.stringify({ success: true, resent: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // New user — send invite
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+    // Try to invite — if already exists, send password reset instead
+    const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
       redirectTo: appUrl,
       data: userData,
     });
 
     if (inviteError) {
-      return new Response(JSON.stringify({ error: inviteError.message }), { status: 400, headers: corsHeaders });
+      // User already has an account — send them a password reset link to get back in
+      const { error: resetError } = await adminClient.auth.resetPasswordForEmail(childEmail, {
+        redirectTo: appUrl,
+      });
+      if (resetError) {
+        return new Response(JSON.stringify({ error: resetError.message }), { status: 400, headers: corsHeaders });
+      }
+      return new Response(JSON.stringify({ success: true, resent: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true, userId: inviteData.user.id }), {
+    return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
