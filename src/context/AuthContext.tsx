@@ -58,10 +58,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) loadProfile(session.user.id);
       else setProfile(null);
 
-      // Invite link clicked — user needs to set a password
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+      // Password reset link clicked
+      if (event === 'PASSWORD_RECOVERY') {
+        setNeedsPasswordSet(true);
+      }
+      // Invite link clicked — SIGNED_IN fires on first login via invite link
+      if (event === 'SIGNED_IN') {
         const hash = window.location.hash;
-        if (hash.includes('type=invite') || hash.includes('type=recovery')) {
+        const search = window.location.search;
+        if (hash.includes('type=invite') || search.includes('type=invite')) {
           setNeedsPasswordSet(true);
         }
       }

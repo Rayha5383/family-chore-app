@@ -32,6 +32,22 @@ function generateUUID() {
   return crypto.randomUUID();
 }
 
+async function seedChoresIfNeeded(adminClient: any, childId: string) {
+  const { count } = await adminClient
+    .from('chores')
+    .select('id', { count: 'exact', head: true })
+    .eq('assigned_user_id', childId);
+  if ((count ?? 0) > 0) return; // already has chores
+  const now = new Date().toISOString();
+  const choresToInsert = SEED_CHORES.map(chore => ({
+    id: generateUUID(),
+    ...chore,
+    assigned_user_id: childId,
+    created_at: now,
+  }));
+  await adminClient.from('chores').insert(choresToInsert);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -100,14 +116,18 @@ Deno.serve(async (req) => {
 
       if (!authUser?.user?.email_confirmed_at) {
         await adminClient.auth.admin.deleteUser(existingId);
-        const { error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+        const { data: reInviteData, error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
           redirectTo: appUrl,
           data: userData,
         });
         if (reInviteError) return ok({ error: 'Re-invite failed: ' + reInviteError.message });
+        if (inviteRole === 'child' && reInviteData?.user?.id) {
+          await seedChoresIfNeeded(adminClient, reInviteData.user.id);
+        }
         return ok({ success: true, resent: true });
       }
 
+      if (inviteRole === 'child') await seedChoresIfNeeded(adminClient, existingId);
       return ok({ success: true, alreadyConfirmed: true });
     }
 
@@ -139,28 +159,23 @@ Deno.serve(async (req) => {
 
       if (!existingUser.email_confirmed_at) {
         await adminClient.auth.admin.deleteUser(existingUser.id);
-        const { error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+        const { data: reInviteData, error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
           redirectTo: appUrl,
           data: userData,
         });
         if (reInviteError) return ok({ error: 'Re-invite failed: ' + reInviteError.message });
+        if (inviteRole === 'child' && reInviteData?.user?.id) {
+          await seedChoresIfNeeded(adminClient, reInviteData.user.id);
+        }
         return ok({ success: true, resent: true });
       }
 
+      if (inviteRole === 'child') await seedChoresIfNeeded(adminClient, existingUser.id);
       return ok({ success: true, alreadyConfirmed: true });
     }
 
-    // Seed default chores for children
     if (inviteRole === 'child' && inviteData?.user?.id) {
-      const childId = inviteData.user.id;
-      const now = new Date().toISOString();
-      const choresToInsert = SEED_CHORES.map(chore => ({
-        id: generateUUID(),
-        ...chore,
-        assigned_user_id: childId,
-        created_at: now,
-      }));
-      await adminClient.from('chores').insert(choresToInsert);
+      await seedChoresIfNeeded(adminClient, inviteData.user.id);
     }
 
     return ok({ success: true });
