@@ -31,6 +31,7 @@ export function AddChildModal({ onClose }: Props) {
         childName: childName.trim(),
         avatarEmoji: avatar,
         monthlyCap: parseFloat(monthlyCap) || 100,
+        redirectTo: window.location.origin,
       },
     });
 

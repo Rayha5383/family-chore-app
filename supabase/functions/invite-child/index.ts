@@ -37,13 +37,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Only parents can invite children' }), { status: 403, headers: corsHeaders });
     }
 
-    const { childEmail, childName, avatarEmoji, monthlyCap } = await req.json();
+    const { childEmail, childName, avatarEmoji, monthlyCap, redirectTo } = await req.json();
     if (!childEmail || !childName) {
       return new Response(JSON.stringify({ error: 'childEmail and childName are required' }), { status: 400, headers: corsHeaders });
     }
 
     // Send invite email via Supabase Admin
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+      redirectTo: redirectTo || 'https://family-chore-app.vercel.app',
       data: {
         name: childName,
         avatar_emoji: avatarEmoji || '🦁',
