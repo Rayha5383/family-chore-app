@@ -32,26 +32,30 @@ Deno.serve(async (req) => {
 
     // Verify caller is a parent
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: callerProfile } = await adminClient.from('profiles').select('role').eq('id', user.id).single();
+    const { data: callerProfile } = await adminClient.from('profiles').select('role, parent_id').eq('id', user.id).single();
     if (!callerProfile || callerProfile.role !== 'parent') {
-      return new Response(JSON.stringify({ error: 'Only parents can invite children' }), { status: 403, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'Only parents can send invites' }), { status: 403, headers: corsHeaders });
     }
 
-    const { childEmail, childName, avatarEmoji, monthlyCap, redirectTo } = await req.json();
+    const { childEmail, childName, avatarEmoji, monthlyCap, redirectTo, role } = await req.json();
     if (!childEmail || !childName) {
       return new Response(JSON.stringify({ error: 'childEmail and childName are required' }), { status: 400, headers: corsHeaders });
     }
+
+    const inviteRole = role === 'parent' ? 'parent' : 'child';
+    // Co-parents link to the same primary parent as the caller
+    const primaryParentId = callerProfile.parent_id || user.id;
 
     // Send invite email via Supabase Admin
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
       redirectTo: redirectTo || 'https://family-chore-app-chi.vercel.app',
       data: {
         name: childName,
-        avatar_emoji: avatarEmoji || '🦁',
-        avatar_color: 'bg-indigo-500',
-        role: 'child',
-        monthly_cap: monthlyCap || 100,
-        parent_id: user.id,
+        avatar_emoji: inviteRole === 'parent' ? '👨‍👧' : (avatarEmoji || '🦁'),
+        avatar_color: inviteRole === 'parent' ? 'bg-amber-500' : 'bg-indigo-500',
+        role: inviteRole,
+        monthly_cap: inviteRole === 'parent' ? 0 : (monthlyCap || 100),
+        parent_id: primaryParentId,
       },
     });
 

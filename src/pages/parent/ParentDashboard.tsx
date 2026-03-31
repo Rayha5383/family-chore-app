@@ -6,10 +6,12 @@ import { currentMonth } from '../../lib/utils';
 import { Badge } from '../../components/ui/Badge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { AddChildModal } from './AddChildModal';
+import { InviteCoParentModal } from './InviteCoParentModal';
 
 export function ParentDashboard() {
   const { state, loading } = useStore();
   const [showAddChild, setShowAddChild] = useState(false);
+  const [showInviteParent, setShowInviteParent] = useState(false);
   const [visibleCredentials, setVisibleCredentials] = useState<string | null>(null);
 
   const pendingReview = state.instances.filter(i => i.status === 'submitted');
@@ -40,12 +42,20 @@ export function ParentDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 text-sm">Overview of all chore activity</p>
         </div>
-        <button
-          onClick={() => setShowAddChild(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <UserPlus size={16} /> Add Child
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowInviteParent(true)}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <UserPlus size={16} /> Co-Parent
+          </button>
+          <button
+            onClick={() => setShowAddChild(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <UserPlus size={16} /> Add Child
+          </button>
+        </div>
       </div>
 
       {pendingReview.length > 0 && (
@@ -120,6 +130,7 @@ export function ParentDashboard() {
       )}
 
       {showAddChild && <AddChildModal onClose={() => setShowAddChild(false)} />}
+      {showInviteParent && <InviteCoParentModal onClose={() => setShowInviteParent(false)} />}
     </div>
   );
 }

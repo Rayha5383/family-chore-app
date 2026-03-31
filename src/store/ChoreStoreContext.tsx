@@ -178,8 +178,13 @@ export function ChoreStoreProvider({ children }: { children: React.ReactNode }) 
     let users: User[] = [selfUser];
 
     if (profile.role === 'parent') {
-      const { data: kids } = await supabase.from('profiles').select('*').eq('parent_id', profile.id);
-      if (kids) users = [selfUser, ...kids.map(mapProfile)];
+      // Primary parent: parent_id is null. Co-parent: parent_id points to primary parent.
+      const familyParentId = profile.parent_id || profile.id;
+      const { data: familyMembers } = await supabase.from('profiles').select('*').eq('parent_id', familyParentId);
+      if (familyMembers) {
+        const others = familyMembers.map(mapProfile).filter(u => u.id !== profile.id);
+        users = [selfUser, ...others];
+      }
     }
 
     const { data: rawChores } = await supabase.from('chores').select('*');
