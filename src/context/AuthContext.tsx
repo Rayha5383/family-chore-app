@@ -19,11 +19,12 @@ interface AuthContextValue {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
+  needsPasswordSet: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-  user: null, profile: null, session: null, loading: true,
+  user: null, profile: null, session: null, loading: true, needsPasswordSet: false,
   signOut: async () => {},
 });
 
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsPasswordSet, setNeedsPasswordSet] = useState(false);
 
   const loadProfile = async (userId: string) => {
     const { data } = await supabase
@@ -50,11 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) loadProfile(session.user.id);
       else setProfile(null);
+
+      // Invite link clicked — user needs to set a password
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+        const hash = window.location.hash;
+        if (hash.includes('type=invite') || hash.includes('type=recovery')) {
+          setNeedsPasswordSet(true);
+        }
+      }
+
       setLoading(false);
     });
 
@@ -66,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, session, loading, needsPasswordSet, signOut }}>
       {children}
     </AuthContext.Provider>
   );

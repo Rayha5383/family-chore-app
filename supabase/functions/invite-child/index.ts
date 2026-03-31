@@ -10,6 +10,28 @@ const ok = (data: object) => new Response(JSON.stringify(data), {
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
 
+const SEED_CHORES = [
+  { title: 'Make Bed', description: 'Make your bed neatly — pillows straight, blanket smooth', frequency: 'daily', value: 0.34, due_time: '08:00', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Brush Teeth (Morning)', description: 'Brush for at least 2 minutes before school', frequency: 'daily', value: 0.27, due_time: '08:00', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Shoes Put Away', description: 'Shoes in the closet or shoe rack, not the floor', frequency: 'daily', value: 0.20, due_time: '20:00', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Backpack Hung Up', description: 'Backpack on the hook, not on the floor', frequency: 'daily', value: 0.20, due_time: '17:00', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Brush Teeth (Night)', description: 'Brush before bed', frequency: 'daily', value: 0.27, due_time: '21:00', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Bedroom Surfaces Clean', description: 'Desk, nightstand, and dresser cleared and wiped', frequency: 'daily', value: 0.40, due_time: '20:00', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Clean a Full Bathroom', description: 'Sink, mirror, toilet, floor, and trash — all done', frequency: 'weekly', value: 3.00, due_time: '20:00', verification_type: 'both', checklist_items: ['Sink scrubbed', 'Mirror cleaned', 'Toilet cleaned', 'Floor mopped/swept', 'Trash emptied'], requires_before_after: true, active: true, week_days: [0, 6] },
+  { title: 'Do Your Own Laundry', description: 'Wash, dry, fold, and put away your laundry', frequency: 'weekly', value: 3.00, due_time: '20:00', verification_type: 'both', checklist_items: ['Clothes washed', 'Clothes dried', 'Folded and put away'], requires_before_after: false, active: true, week_days: [0, 6] },
+  { title: 'Mop the Downstairs Floor', description: 'Sweep then mop the entire downstairs floor', frequency: 'weekly', value: 4.00, due_time: '20:00', verification_type: 'photo', checklist_items: [], requires_before_after: true, active: true, week_days: [0, 6] },
+  { title: 'Mow the Lawn', description: 'Mow the front and back yard', frequency: 'weekly', value: 12.00, due_time: '20:00', verification_type: 'photo', checklist_items: [], requires_before_after: true, active: true, week_days: [6] },
+  { title: 'Unload the Dishwasher', description: 'Unload all clean dishes and put them away', frequency: 'anytime', value: 1.00, due_time: '23:59', verification_type: 'photo', checklist_items: [], requires_before_after: true, active: true, week_days: [] },
+  { title: 'Cook Dinner', description: 'Cook a full meal for the family', frequency: 'anytime', value: 5.00, due_time: '23:59', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+  { title: 'Organize a Closet or Drawer', description: 'Pick one closet or drawer and fully organize it', frequency: 'anytime', value: 3.00, due_time: '23:59', verification_type: 'photo', checklist_items: [], requires_before_after: true, active: true, week_days: [] },
+  { title: 'Wash Windows', description: 'Wash windows inside and out including sills ($2 per window)', frequency: 'anytime', value: 2.00, due_time: '23:59', verification_type: 'photo', checklist_items: [], requires_before_after: true, active: true, week_days: [] },
+  { title: 'Take the Dogs Out', description: 'Take the dogs outside for a walk or bathroom break', frequency: 'anytime', value: 0.50, due_time: '23:59', verification_type: 'photo', checklist_items: [], requires_before_after: false, active: true, week_days: [] },
+];
+
+function generateUUID() {
+  return crypto.randomUUID();
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -58,13 +80,20 @@ Deno.serve(async (req) => {
 
     // Check if user already exists
     const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    const existingUser = listData?.users?.find(u => u.email?.toLowerCase() === childEmail.toLowerCase());
+    const existingUser = listData?.users?.find((u: any) => u.email?.toLowerCase() === childEmail.toLowerCase());
 
     if (existingUser) {
-      // Update metadata
       await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: userData });
 
-      // If never confirmed, delete and re-invite
+      // Update profile directly too
+      await adminClient.from('profiles').update({
+        name: childName,
+        avatar_emoji: userData.avatar_emoji,
+        role: inviteRole,
+        monthly_cap: userData.monthly_cap,
+        parent_id: primaryParentId,
+      }).eq('id', existingUser.id);
+
       if (!existingUser.email_confirmed_at) {
         await adminClient.auth.admin.deleteUser(existingUser.id);
         const { error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
@@ -79,12 +108,25 @@ Deno.serve(async (req) => {
     }
 
     // New user — send invite
-    const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
       redirectTo: appUrl,
       data: userData,
     });
 
     if (inviteError) return ok({ error: 'Invite failed: ' + inviteError.message });
+
+    // Seed default chores for children
+    if (inviteRole === 'child' && inviteData?.user?.id) {
+      const childId = inviteData.user.id;
+      const now = new Date().toISOString();
+      const choresToInsert = SEED_CHORES.map(chore => ({
+        id: generateUUID(),
+        ...chore,
+        assigned_user_id: childId,
+        created_at: now,
+      }));
+      await adminClient.from('chores').insert(choresToInsert);
+    }
 
     return ok({ success: true });
 

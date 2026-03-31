@@ -4,6 +4,7 @@ import { SessionContext } from './context/SessionContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppShell } from './components/layout/AppShell';
 import { Login } from './pages/Login';
+import { SetPassword } from './pages/SetPassword';
 import { ParentDashboard } from './pages/parent/ParentDashboard';
 import { ChoreCreator } from './pages/parent/ChoreCreator';
 import { SubmissionReview } from './pages/parent/SubmissionReview';
@@ -14,7 +15,7 @@ import { EarningsTracker } from './pages/kid/EarningsTracker';
 import { History } from './pages/kid/History';
 
 function AppRoutes() {
-  const { profile, loading, signOut } = useAuth();
+  const { profile, loading, needsPasswordSet, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -24,6 +25,7 @@ function AppRoutes() {
     );
   }
 
+  if (needsPasswordSet) return <SetPassword />;
   if (!profile) return <Login />;
 
   const isParent = profile.role === 'parent';
