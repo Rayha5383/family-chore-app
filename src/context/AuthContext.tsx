@@ -70,6 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setNeedsPasswordSet(true);
         }
       }
+      // Password was successfully updated — clear the flag and proceed
+      if (event === 'USER_UPDATED') {
+        setNeedsPasswordSet(false);
+      }
 
       setLoading(false);
     });
