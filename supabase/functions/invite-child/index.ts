@@ -117,7 +117,38 @@ Deno.serve(async (req) => {
       data: userData,
     });
 
-    if (inviteError) return ok({ error: 'Invite failed: ' + inviteError.message });
+    if (inviteError) {
+      // User exists in auth but not found in profiles (e.g. login_email not set yet)
+      const alreadyExists = inviteError.message.toLowerCase().includes('already');
+      if (!alreadyExists) return ok({ error: 'Invite failed: ' + inviteError.message });
+
+      // Fallback: find via listUsers and handle re-invite
+      const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+      const existingUser = listData?.users?.find((u: any) => u.email?.toLowerCase() === childEmail.toLowerCase());
+      if (!existingUser) return ok({ error: 'User exists but could not be located' });
+
+      await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: userData });
+      await adminClient.from('profiles').update({
+        name: childName,
+        avatar_emoji: userData.avatar_emoji,
+        role: inviteRole,
+        monthly_cap: userData.monthly_cap,
+        parent_id: primaryParentId,
+        login_email: childEmail.toLowerCase(),
+      }).eq('id', existingUser.id);
+
+      if (!existingUser.email_confirmed_at) {
+        await adminClient.auth.admin.deleteUser(existingUser.id);
+        const { error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
+          redirectTo: appUrl,
+          data: userData,
+        });
+        if (reInviteError) return ok({ error: 'Re-invite failed: ' + reInviteError.message });
+        return ok({ success: true, resent: true });
+      }
+
+      return ok({ success: true, alreadyConfirmed: true });
+    }
 
     // Seed default chores for children
     if (inviteRole === 'child' && inviteData?.user?.id) {
