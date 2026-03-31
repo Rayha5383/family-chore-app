@@ -10,6 +10,8 @@ interface Profile {
   avatar_emoji: string;
   avatar_color: string;
   monthly_cap: number;
+  parent_id?: string;
+  login_email?: string;
 }
 
 interface AuthContextValue {
