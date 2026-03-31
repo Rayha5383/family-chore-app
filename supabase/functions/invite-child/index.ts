@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     // Send invite email via Supabase Admin
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
-      redirectTo: redirectTo || 'https://family-chore-app.vercel.app',
+      redirectTo: redirectTo || 'https://family-chore-app-chi.vercel.app',
       data: {
         name: childName,
         avatar_emoji: avatarEmoji || '🦁',
