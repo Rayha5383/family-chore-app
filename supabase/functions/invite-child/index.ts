@@ -60,6 +60,37 @@ Deno.serve(async (req) => {
     });
 
     if (inviteError) {
+      // If user already exists, resend the invite
+      if (inviteError.message?.toLowerCase().includes('already been registered') ||
+          inviteError.message?.toLowerCase().includes('already exists') ||
+          inviteError.code === '422') {
+        // Look up the existing user and resend invite link
+        const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+        const existing = existingUsers?.users?.find(u => u.email === childEmail);
+        if (existing) {
+          const { error: resetError } = await adminClient.auth.admin.generateLink({
+            type: 'invite',
+            email: childEmail,
+            options: {
+              redirectTo: redirectTo || 'https://family-chore-app-chi.vercel.app',
+              data: {
+                name: childName,
+                avatar_emoji: inviteRole === 'parent' ? '👨‍👧' : (avatarEmoji || '🦁'),
+                avatar_color: inviteRole === 'parent' ? 'bg-amber-500' : 'bg-indigo-500',
+                role: inviteRole,
+                monthly_cap: inviteRole === 'parent' ? 0 : (monthlyCap || 100),
+                parent_id: primaryParentId,
+              },
+            },
+          });
+          if (resetError) {
+            return new Response(JSON.stringify({ error: 'User already exists and could not resend invite: ' + resetError.message }), { status: 400, headers: corsHeaders });
+          }
+          return new Response(JSON.stringify({ success: true, resent: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
       return new Response(JSON.stringify({ error: inviteError.message }), { status: 400, headers: corsHeaders });
     }
 
