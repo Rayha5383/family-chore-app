@@ -78,24 +78,28 @@ Deno.serve(async (req) => {
       parent_id: primaryParentId,
     };
 
-    // Check if user already exists
-    const { data: listData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    const existingUser = listData?.users?.find((u: any) => u.email?.toLowerCase() === childEmail.toLowerCase());
+    // Check if user already exists via profiles table (fast, avoids listUsers timeout)
+    const { data: existingProfile } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('login_email', childEmail.toLowerCase())
+      .maybeSingle();
 
-    if (existingUser) {
-      await adminClient.auth.admin.updateUserById(existingUser.id, { user_metadata: userData });
+    if (existingProfile?.id) {
+      const existingId = existingProfile.id;
+      const { data: authUser } = await adminClient.auth.admin.getUserById(existingId);
 
-      // Update profile directly too
+      await adminClient.auth.admin.updateUserById(existingId, { user_metadata: userData });
       await adminClient.from('profiles').update({
         name: childName,
         avatar_emoji: userData.avatar_emoji,
         role: inviteRole,
         monthly_cap: userData.monthly_cap,
         parent_id: primaryParentId,
-      }).eq('id', existingUser.id);
+      }).eq('id', existingId);
 
-      if (!existingUser.email_confirmed_at) {
-        await adminClient.auth.admin.deleteUser(existingUser.id);
+      if (!authUser?.user?.email_confirmed_at) {
+        await adminClient.auth.admin.deleteUser(existingId);
         const { error: reInviteError } = await adminClient.auth.admin.inviteUserByEmail(childEmail, {
           redirectTo: appUrl,
           data: userData,
